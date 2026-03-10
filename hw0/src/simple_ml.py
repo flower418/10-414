@@ -20,7 +20,7 @@ def add(x, y):
         Sum of x + y
     """
     ### BEGIN YOUR CODE
-    pass
+    return x + y
     ### END YOUR CODE
 
 
@@ -48,7 +48,33 @@ def parse_mnist(image_filename, label_filename):
                 for MNIST will contain the values 0-9.
     """
     ### BEGIN YOUR CODE
-    pass
+    # MNIST 的图像文件前 16 个字节分别为：
+    # magic number
+    # number of images
+    # number of rows
+    # number of cols
+    # 按大端序排序
+    # 这里需要用到 gzip 的 open
+    with gzip.open(image_filename, "rb") as f_img, gzip.open(label_filename, "rb") as f_lbl:
+        magic_img = int.from_bytes(f_img.read(4), "big")
+        num_images = int.from_bytes(f_img.read(4), "big")
+        rows = int.from_bytes(f_img.read(4), "big")
+        cols = int.from_bytes(f_img.read(4), "big")
+        
+        img_data = f_img.read()
+        X = np.frombuffer(img_data, dtype=np.uint8).reshape(num_images, rows*cols) # np.frombuffer 直接将读取出来的 img_data 转为 np 数组
+        X = X.astype(np.float32) / 255
+    
+        # MNIST 的标签文件前 8 个字节：
+        # magic number
+        # number of labels
+        magic_lbl = int.from_bytes(f_lbl.read(4), "big")
+        num_labels = int.from_bytes(f_lbl.read(4), "big")
+        
+        lbl_data = f_lbl.read()
+        y = np.frombuffer(lbl_data, dtype=np.uint8)
+        
+    return X, y
     ### END YOUR CODE
 
 
@@ -68,7 +94,9 @@ def softmax_loss(Z, y):
         Average softmax loss over the sample.
     """
     ### BEGIN YOUR CODE
-    pass
+    # 这里需要使用高级索引来获取 z_y
+    num_samples = len(y)
+    return np.sum(np.log(np.sum(np.exp(Z), axis=1)) - Z[np.arange(num_samples), y]) / num_samples
     ### END YOUR CODE
 
 
@@ -91,7 +119,25 @@ def softmax_regression_epoch(X, y, theta, lr = 0.1, batch=100):
         None
     """
     ### BEGIN YOUR CODE
-    pass
+    # num_examples: m
+    # num_classes: k
+    # x_input_dim: n
+    num_examples = X.shape[0] # m
+    num_classes = theta.shape[1] # k
+    
+    for start in range(0, num_examples, batch):
+        X_batch = X[start:start+batch, :] # batch*n
+        y_batch = y[start:start+batch] # batch*1
+        
+        I_y = np.zeros((batch, num_classes)) # batch*k
+        I_y[np.arange(batch), y_batch] = 1
+        
+        # theta: n*k
+        hx = X_batch @ theta # batch*k
+        Z = np.exp(hx) / np.sum(np.exp(hx), axis=1, keepdims=True) # batch*k
+        
+        gd_loss = X_batch.T @ (Z - I_y) / batch # n*k
+        theta -= lr * gd_loss
     ### END YOUR CODE
 
 
@@ -118,7 +164,35 @@ def nn_epoch(X, y, W1, W2, lr = 0.1, batch=100):
         None
     """
     ### BEGIN YOUR CODE
-    pass
+    # m: num_examples
+    # n: input_dim
+    # k: num_classes
+    # l: hidden_dim
+    # W1: n*l
+    # W2: l*k
+    # X_batch: batch*n
+    # y_batch: batch*1
+    num_examples = X.shape[0]
+    num_classes = W2.shape[1]
+    
+    for start in range(0, num_examples, batch):
+        X_batch = X[start:start+batch, :]
+        y_batch = y[start:start+batch]
+        
+        Z1 = np.maximum(0, X_batch @ W1) # relu
+        indicator = (Z1 > 0).astype(int) # batch*l
+        
+        I_y = np.zeros((batch, num_classes)) # 这里 zeros 传入形状的时候必须加括号
+        I_y[np.arange(batch), y_batch] = 1
+        
+        G2 = np.exp(Z1 @ W2) / np.sum(np.exp(Z1 @ W2), axis=1, keepdims=True) - I_y
+        G1 = indicator * (G2 @ W2.T)
+        
+        gd_W1 = X_batch.T @ G1 / batch
+        gd_W2 = Z1.T @ G2 / batch
+        
+        W1 -= lr * gd_W1
+        W2 -= lr * gd_W2
     ### END YOUR CODE
 
 
